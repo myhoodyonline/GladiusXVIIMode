@@ -1,0 +1,232 @@
+<!DOCTYPE_html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Top-Down Arena Game</title>
+  <style>
+    canvas { background: #111; display: block; margin: 0 auto; }
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="1200" height="800"></canvas>
+<script src="vod/js/ctrlhold.js"></script>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const playerImg = new Image();
+playerImg.src = "vod/player.png";
+
+const enemyImg = new Image();
+enemyImg.src = "vod/enemy.png";
+
+const safeZone = { x: 200, y: 200, width: 300, height: 300 };
+const colliders = [
+  // Room walls with door gap
+  { x: 0, y: 0, width: 800, height: 40 },
+  { x: 900, y: 0, width: 1100, height: 40 },
+  { x: 0, y: 1960, width: 2000, height: 40 },
+  { x: 0, y: 0, width: 40, height: 2000 },
+  { x: 1960, y: 0, width: 40, height: 2000 },
+  // Interior obstacles
+  { x: 800, y: 600, width: 100, height: 100 },
+  { x: 1000, y: 1000, width: 150, height: 150 },
+  { x: 600, y: 1300, width: 200, height: 50 }
+];
+
+const player = {
+  x: 300, y: 300, radius: 20, speed: 3,
+  health: 100, maxHealth: 100,
+  target: { x: 300, y: 300 },
+  regenCooldown: 0,
+  weaponAngle: 0
+};
+
+const enemies = [
+  {
+    x: 1500, y: 1500, speed: 1.5, health: 100, maxHealth: 100,
+    patrol: [{ x: 1500, y: 1500 }, { x: 1700, y: 1300 }],
+    patrolIndex: 0, active: false, regenCooldown: 0,
+    weaponSwing: 0, swingDir: 1
+  },
+  {
+    x: 1200, y: 400, speed: 1.2, health: 100, maxHealth: 100,
+    patrol: [{ x: 1200, y: 400 }, { x: 1000, y: 600 }],
+    patrolIndex: 0, active: false, regenCooldown: 0,
+    weaponSwing: 0, swingDir: 1
+  }
+];
+
+const camera = { x: 0, y: 0 };
+let ctrlPressed = false;
+let swingTime = 0;
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey) ctrlPressed = true;
+});
+document.addEventListener("keyup", e => {
+  if (!e.ctrlKey) {
+    ctrlPressed = false;
+    swingTime = 0;
+  }
+});
+
+canvas.addEventListener("click", e => {
+  const rect = canvas.getBoundingClientRect();
+  player.target.x = e.clientX - rect.left + camera.x;
+  player.target.y = e.clientY - rect.top + camera.y;
+});
+
+function drawHealthBar(x, y, width, height, health, maxHealth, color) {
+  ctx.fillStyle = "gray";
+  ctx.fillRect(x, y, width, height);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, (health / maxHealth) * width, height);
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isInsideSafeZone(x, y) {
+  return (
+    x > safeZone.x &&
+    x < safeZone.x + safeZone.width &&
+    y > safeZone.y &&
+    y < safeZone.y + safeZone.height
+  );
+}
+
+function updateRegen(entity) {
+  if (entity.regenCooldown > 0) entity.regenCooldown--;
+  else if (entity.health < entity.maxHealth) entity.health = Math.min(entity.maxHealth, entity.health + 0.1);
+}
+
+function isColliding(x, y, radius) {
+  return colliders.some(c =>
+    x + radius > c.x &&
+    x - radius < c.x + c.width &&
+    y + radius > c.y &&
+    y - radius < c.y + c.height
+  );
+}
+
+function moveWithCollision(entity, dx, dy) {
+  const radius = entity.radius || 15;
+  const newX = entity.x + dx;
+  if (!isColliding(newX, entity.y, radius)) entity.x = newX;
+  const newY = entity.y + dy;
+  if (!isColliding(entity.x, newY, radius)) entity.y = newY;
+}
+
+function moveTowardWithCollision(entity, target, speed) {
+  const dx = target.x - entity.x;
+  const dy = target.y - entity.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 1) {
+    const stepX = (dx / dist) * speed;
+    const stepY = (dy / dist) * speed;
+    moveWithCollision(entity, stepX, stepY);
+  }
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  camera.x = player.x - canvas.width / 2;
+  camera.y = player.y - canvas.height / 2;
+
+  moveTowardWithCollision(player, player.target, player.speed);
+
+  enemies.forEach(enemy => {
+    const distToPlayer = distance(player, enemy);
+    if (distToPlayer < 400 && !isInsideSafeZone(player.x, player.y)) enemy.active = true;
+
+    if (enemy.active) {
+      if (distToPlayer > 30 && !isInsideSafeZone(player.x, player.y)) {
+        moveTowardWithCollision(enemy, player, enemy.speed);
+      } else if (distToPlayer <= 30) {
+        player.health = Math.max(0, player.health - 0.5);
+        player.regenCooldown = 100;
+      } else {
+        moveTowardWithCollision(enemy, enemy.patrol[0], enemy.speed);
+      }
+    } else {
+      const patrolTarget = enemy.patrol[enemy.patrolIndex];
+      if (distance(enemy, patrolTarget) < 10) {
+        enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.patrol.length;
+      }
+      moveTowardWithCollision(enemy, patrolTarget, enemy.speed);
+    }
+
+    if (distToPlayer < 40 && !isInsideSafeZone(player.x, player.y)) {
+      enemy.health = Math.max(0, enemy.health - 0.3);
+      enemy.regenCooldown = 100;
+    }
+
+    updateRegen(enemy);
+    enemy.weaponSwing += 0.05 * enemy.swingDir;
+    if (enemy.weaponSwing > 0.5 || enemy.weaponSwing < -0.5) enemy.swingDir *= -1;
+  });
+
+  updateRegen(player);
+  if (ctrlPressed) {
+    swingTime += 0.1;
+    player.weaponAngle = Math.sin(swingTime) * 0.8;
+  } else {
+    player.weaponAngle = 0;
+  }
+
+  // Draw safe zone
+  ctx.fillStyle = "rgba(0,255,0,0.2)";
+  ctx.fillRect(safeZone.x - camera.x, safeZone.y - camera.y, safeZone.width, safeZone.height);
+
+  // Draw colliders
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  colliders.forEach(c => {
+    ctx.fillRect(c.x - camera.x, c.y - camera.y, c.width, c.height);
+  });
+
+  // Draw door gap
+  ctx.fillStyle = "rgba(0,255,255,0.3)";
+  ctx.fillRect(800 - camera.x, 0 - camera.y, 100, 40);
+
+  // Draw player
+  ctx.drawImage(playerImg, player.x - 20 - camera.x, player.y - 20 - camera.y, 40, 40);
+  ctx.save();
+  ctx.translate(player.x - camera.x, player.y - camera.y);
+  ctx.rotate(player.weaponAngle);
+  ctx.fillStyle = "red";
+  ctx.fillRect(-3, -40, 6, 20);
+  ctx.restore();
+
+  // Draw enemies
+  enemies.forEach(enemy => {
+    ctx.drawImage(enemyImg, enemy.x - 15 - camera.x, enemy.y - 15 - camera.y, 30, 30);
+    ctx.save();
+    ctx.translate(enemy.x - camera.x, enemy.y - camera.y);
+    ctx.rotate(enemy.weaponSwing
+);
+    ctx.fillStyle = "blue";
+    ctx.fillRect(-2, 15, 4, 25); // swinging blade
+    ctx.restore();
+  });
+
+  // Draw health bars
+  drawHealthBar(20, 20, 200, 10, player.health, player.maxHealth, "lime");
+  enemies.forEach((enemy, i) => {
+    drawHealthBar(20, 40 + i * 20, 200, 10, enemy.health, enemy.maxHealth, "red");
+  });
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Start game loop after images load
+playerImg.onload = () => {
+  enemyImg.onload = () => {
+    gameLoop();
+  };
+};
+</script>
+</body>
+</html>
