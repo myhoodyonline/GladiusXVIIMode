@@ -1,232 +1,488 @@
-<!DOCTYPE_html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Top-Down Arena Game</title>
+  <meta charset="UTF-8">
+  <title>Open Quest & Science Mission - Shield and Dellusions</title>
+  <link rel="stylesheet" href="vod/css/game.css">
   <style>
-    canvas { background: #111; display: block; margin: 0 auto; }
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; background: #181c24; color: #eee; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+    #mainLayout { display: flex; height: 100vh; width: 100vw; }
+    #gameArea { flex: 1 1 70%; position: relative; background: #222; display: flex; align-items: center; justify-content: center; min-width: 600px; }
+    #logPanel { flex: 0 0 340px; background: #23243a; border-left: 2px solid #333; display: flex; flex-direction: column; height: 100vh; box-shadow: -2px 0 8px #000a; }
+    #logHeader { padding: 16px 16px 8px 16px; font-size: 1.3em; color: #ffd700; border-bottom: 1px solid #333; background: #23243a; }
+    #logFeed { flex: 1 1 auto; overflow-y: auto; padding: 12px 16px; font-size: 1em; background: #23243a; }
+    #logFeed .logEntry { margin-bottom: 16px; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    #logFeed .logEntry:last-child { border-bottom: none; }
+    #potionUI { position: absolute; top: 16px; right: 24px; z-index: 20; display: flex; align-items: center; background: rgba(32,32,32,0.85); border-radius: 10px; padding: 6px 14px; box-shadow: 0 2px 8px #000a; }
+    #potionImg { width: 40px; height: 40px; cursor: pointer; margin-right: 8px; filter: drop-shadow(0 0 6px #f44); transition: transform 0.1s; }
+    #potionImg:active { transform: scale(0.95); }
+    #potionCount { font-size: 1.2em; color: #ffd700; }
+    #uiBars { position: absolute; left: 24px; top: 16px; z-index: 10; background: rgba(32,32,32,0.85); border-radius: 10px; padding: 10px 18px; box-shadow: 0 2px 8px #000a; }
+    .bar-bg { background: #333; border-radius: 6px; width: 180px; height: 14px; margin-bottom: 4px; }
+    .bar-fg { height: 14px; border-radius: 6px; }
+    .bar-label { font-size: 0.98em; color: #fff; margin-bottom: 8px; }
+    #popup { position: fixed; left: 50%; top: 20%; transform: translate(-50%, 0); background: #23243a; color: #ffd700; border: 2px solid #ffd700; border-radius: 12px; padding: 24px 32px; font-size: 1.2em; z-index: 100; box-shadow: 0 4px 24px #000c; display: none; min-width: 240px; text-align: center; }
+    #popup img { width: 48px; height: 48px; margin-bottom: 12px; }
+    #popup button { margin-top: 18px; background: #ffd700; color: #23243a; border: none; border-radius: 6px; padding: 8px 24px; font-size: 1em; cursor: pointer; }
+    #logEntryForm { padding: 12px 16px 0 16px; background: #23243a; border-bottom: 1px solid #333; display: flex; flex-direction: column; gap: 8px; }
+    #logEntryForm input, #logEntryForm select, #logEntryForm textarea { background: #181c24; color: #ffd700; border: 1px solid #444; border-radius: 5px; padding: 4px 8px; font-size: 1em; }
+    #logEntryForm button { background: #ffd700; color: #23243a; border: none; border-radius: 6px; padding: 6px 18px; font-size: 1em; cursor: pointer; align-self: flex-end; }
+    #logEntryForm label { color: #ffe; font-size: 0.98em; }
+    #musicControls { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 30; background: rgba(32,32,32,0.85); border-radius: 10px; box-shadow: 0 2px 8px #000a; padding: 6px 16px; display: flex; align-items: center; gap: 10px; }
+    #musicToggle { background: #ffd700; color: #23243a; border: none; border-radius: 6px; padding: 6px 16px; font-size: 1em; cursor: pointer; }
+    #musicVolume { width: 80px; }
+    #pausedOverlay { display: none; position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+    #pausedOverlay h1 { color: #ffd700; font-size: 3em; text-shadow: 2px 2px 8px #000; }
+    #miniMap { position: absolute; bottom: 16px; right: 24px; z-index: 20; background: #222; border: 1px solid #444; border-radius: 6px; }
+    #gameOverOverlay { display:none;position:fixed;left:0;top:0;width:100vw;height:100vh; background:rgba(0,0,0,0.8);z-index:300;align-items:center;justify-content:center;flex-direction:column; }
+    #gameOverOverlay h1 { color:#ffd700; }
+    #gameOverOverlay button { font-size:1.2em;padding:10px 30px; }
+    #playerShieldBar { background:cyan;width:100%;height:14px;border-radius:6px; }
+    #playerShieldLabel { color:cyan; }
   </style>
 </head>
 <body>
-<canvas id="gameCanvas" width="1200" height="800"></canvas>
-<script src="vod/js/ctrlhold.js"></script>
-<script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+  <div id="musicControls">
+    <button id="musicToggle">Pause Music</button>
+    <label style="color:#ffd700;">Volume</label>
+    <input id="musicVolume" type="range" min="0" max="1" step="0.01" value="0.5">
+  </div>
+  <div id="pausedOverlay"><h1>Game Paused</h1></div>
+  <div id="gameOverOverlay" style="display:none;align-items:center;justify-content:center;flex-direction:column;">
+    <h1>Game Over</h1>
+    <button onclick="restartGame()">Restart</button>
+  </div>
+  <div id="mainLayout">
+    <div id="gameArea">
+      <canvas id="gameCanvas" width="900" height="600"></canvas>
+      <canvas id="miniMap" width="120" height="80"></canvas>
+      <div id="uiBars">
+        <div class="bar-label">Player</div>
+        <div class="bar-bg"><div id="playerBar" class="bar-fg" style="background:lime;width:100%"></div></div>
+        <div id="playerBarLabel" class="bar-label" style="color:lime;">100/100</div>
+        <div class="bar-label" style="margin-top:8px;">Shield</div>
+        <div class="bar-bg"><div id="playerShieldBar"></div></div>
+        <div id="playerShieldLabel" class="bar-label">50/50</div>
+        <div class="bar-label" style="margin-top:8px;">Enemy</div>
+        <div class="bar-bg"><div id="enemyBar" class="bar-fg" style="background:red;width:100%"></div></div>
+        <div id="enemyBarLabel" class="bar-label" style="color:#f66;">100/100</div>
+      </div>
+      <div id="potionUI">
+        <img id="potionImg" src="vod/images/potion.png" alt="Potion" title="Click or press 1 to use potion" />
+        <span id="potionCount">x3</span>
+      </div>
+    </div>
+    <div id="logPanel">
+      <div id="logHeader">Mission Log</div>
+      <form id="logEntryForm" onsubmit="addCustomLogEntry(event)">
+        <div style="display:flex;gap:8px;">
+          <label>
+            <select id="entryType">
+              <option value="mission">Mission</option>
+              <option value="experiment">Experiment</option>
+              <option value="quest">Quest</option>
+              <option value="event">Event</option>
+            </select>
+          </label>
+          <input id="entryTitle" placeholder="Title" required style="flex:1;">
+        </div>
+        <textarea id="entryDesc" rows="2" placeholder="Description or result..." required></textarea>
+        <button type="submit">Add to Log</button>
+      </form>
+      <div id="logFeed"></div>
+    </div>
+  </div>
+  <div id="popup">
+    <img id="popupImg" src="" alt="" />
+    <div id="popupMsg"></div>
+    <button onclick="closePopup()">OK</button>
+  </div>
+  <audio id="gameBeat" src="vod/audio/sell me dell.mp3" loop></audio>
+  <script>
+    // --- Asset paths ---
+    const playerImgSrc = "vod/images/player.png";
+    const enemyImgSrc  = "vod/images/enemy.png";
+    const potionImgSrc = "vod/images/potion.png";
+    const cellImgSrc   = "vod/images/cell.png";
+    const coinImgSrc   = "vod/images/coin.png";
 
-const playerImg = new Image();
-playerImg.src = "vod/images/player.png";
+    // --- Game State ---
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const playerImg = new Image(), enemyImg = new Image(), cellImg = new Image(), coinImg = new Image();
+    playerImg.src = playerImgSrc; enemyImg.src = enemyImgSrc; cellImg.src = cellImgSrc; coinImg.src = coinImgSrc;
+    let playerImgLoaded = false, enemyImgLoaded = false, coinImgLoaded = false;
+    playerImg.onload = ()=>{playerImgLoaded=true;};
+    enemyImg.onload = ()=>{enemyImgLoaded=true;};
+    coinImg.onload = ()=>{coinImgLoaded=true;};
 
-const enemyImg = new Image();
-enemyImg.src = "vod/images/enemy.png";
+    const player = {
+      x: 200, y: 300, radius: 24, speed: 2,
+      health: 100, maxHealth: 100,
+      shield: 50, maxShield: 50,
+      target: { x: 200, y: 300 },
+      weaponAngle: 0, weaponSwinging: false, weaponSwingTime: 0,
+      swingHitEnemy: [],
+    };
 
-const safeZone = { x: 200, y: 200, width: 300, height: 300 };
-const colliders = [
-  // Room walls with door gap
-  { x: 0, y: 0, width: 800, height: 40 },
-  { x: 900, y: 0, width: 1100, height: 40 },
-  { x: 0, y: 1960, width: 2000, height: 40 },
-  { x: 0, y: 0, width: 40, height: 2000 },
-  { x: 1960, y: 0, width: 40, height: 2000 },
-  // Interior obstacles
-  { x: 800, y: 600, width: 100, height: 100 },
-  { x: 1000, y: 1000, width: 150, height: 150 },
-  { x: 600, y: 1300, width: 200, height: 50 }
-];
+    const enemies = [
+      {
+        type: 1, name: "Hunter", x: 700, y: 300, radius: 24, speed: 1.5,
+        health: 100, maxHealth: 100, shield: 40, maxShield: 40,
+        patrol: [{x:700,y:300},{x:700,y:500}], patrolIndex: 0, active: false,
+        swinging: false, swingPhase: 0, dead: false, delusionShown: false
+      },
+      {
+        type: 2, name: "Tank", x: 500, y: 400, radius: 28, speed: 1,
+        health: 180, maxHealth: 180, shield: 80, maxShield: 80,
+        patrol: [{x:500,y:400},{x:500,y:550}], patrolIndex: 0, active: false,
+        swinging: false, swingPhase: 0, dead: false, delusionShown: false
+      }
+    ];
 
-const player = {
-  x: 300, y: 300, radius: 20, speed: 3,
-  health: 100, maxHealth: 100,
-  target: { x: 300, y: 300 },
-  regenCooldown: 0,
-  weaponAngle: 0
-};
+    const obstacles = [
+      {x: 350, y: 200, w: 60, h: 180},
+      {x: 500, y: 120, w: 120, h: 80},
+      {x: 600, y: 120, w: 80, h: 80}
+    ];
 
-const enemies = [
-  {
-    x: 1500, y: 1500, speed: 1.5, health: 100, maxHealth: 100,
-    patrol: [{ x: 1500, y: 1500 }, { x: 1700, y: 1300 }],
-    patrolIndex: 0, active: false, regenCooldown: 0,
-    weaponSwing: 0, swingDir: 1
-  },
-  {
-    x: 1200, y: 400, speed: 1.2, health: 100, maxHealth: 100,
-    patrol: [{ x: 1200, y: 400 }, { x: 1000, y: 600 }],
-    patrolIndex: 0, active: false, regenCooldown: 0,
-    weaponSwing: 0, swingDir: 1
-  }
-];
+    const collectibles = [
+      { x: 400, y: 200, type: "coin", collected: false },
+      { x: 600, y: 350, type: "health", collected: false }
+    ];
 
-const camera = { x: 0, y: 0 };
-let ctrlPressed = false;
-let swingTime = 0;
+    let potionCount = 3, ctrlPressed = false, paused = false, gameOver = false;
 
-document.addEventListener("keydown", e => {
-  if (e.ctrlKey) ctrlPressed = true;
-});
-document.addEventListener("keyup", e => {
-  if (!e.ctrlKey) {
-    ctrlPressed = false;
-    swingTime = 0;
-  }
-});
+    // --- Music Controls ---
+    const gameBeat = document.getElementById("gameBeat");
+    gameBeat.volume = 0.5;
+    window.addEventListener("load", () => { gameBeat.play().catch(()=>{}); });
+    document.getElementById("musicToggle").onclick = function() {
+      if (gameBeat.paused) { gameBeat.play(); this.textContent = "Pause Music"; }
+      else { gameBeat.pause(); this.textContent = "Play Music"; }
+    };
+    document.getElementById("musicVolume").oninput = function() { gameBeat.volume = this.value; };
 
-canvas.addEventListener("click", e => {
-  const rect = canvas.getBoundingClientRect();
-  player.target.x = e.clientX - rect.left + camera.x;
-  player.target.y = e.clientY - rect.top + camera.y;
-});
+    function setPaused(val) {
+      paused = val;
+      document.getElementById("pausedOverlay").style.display = paused ? "flex" : "none";
+      if (paused) gameBeat.volume = 0.15;
+      else gameBeat.volume = document.getElementById("musicVolume").value;
+    }
+    document.addEventListener("keydown", e => { if (e.key === "Escape") setPaused(!paused); });
 
-function drawHealthBar(x, y, width, height, health, maxHealth, color) {
-  ctx.fillStyle = "gray";
-  ctx.fillRect(x, y, width, height);
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, (health / maxHealth) * width, height);
-}
+    // --- Log Feed ---
+    const logFeed = document.getElementById("logFeed");
+    function logEvent(msg, img, type, title, desc) {
+      const entry = document.createElement("div");
+      entry.className = "logEntry";
+      let icon = "";
+      if (img) icon = `<img src="${img}" style="width:28px;height:28px;vertical-align:middle;margin-right:8px;">`;
+      let header = "";
+      if (type && title) header = `<b style="color:#ffd700;">[${type.charAt(0).toUpperCase()+type.slice(1)}]</b> <span style="color:#fff;">${title}</span><br>`;
+      entry.innerHTML = icon + (header || "") + (desc || msg) + `<div style="font-size:0.85em;color:#888;">${new Date().toLocaleTimeString()}</div>`;
+      logFeed.prepend(entry);
+      while (logFeed.childNodes.length > 40) logFeed.removeChild(logFeed.lastChild);
+    }
 
-function distance(a, b) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
+    function addCustomLogEntry(e) {
+      e.preventDefault();
+      const type = document.getElementById("entryType").value;
+      const title = document.getElementById("entryTitle").value.trim();
+      const desc = document.getElementById("entryDesc").value.trim();
+      let img = "";
+      if (type === "mission") img = cellImgSrc;
+      else if (type === "experiment") img = playerImgSrc;
+      else if (type === "quest") img = enemyImgSrc;
+      else if (type === "event") img = potionImgSrc;
+      logEvent("", img, type, title, desc);
+      document.getElementById("entryTitle").value = "";
+      document.getElementById("entryDesc").value = "";
+    }
 
-function isInsideSafeZone(x, y) {
-  return (
-    x > safeZone.x &&
-    x < safeZone.x + safeZone.width &&
-    y > safeZone.y &&
-    y < safeZone.y + safeZone.height
-  );
-}
+    function showPopup(msg, img) {
+      document.getElementById("popupMsg").innerHTML = msg;
+      document.getElementById("popupImg").src = img || "";
+      document.getElementById("popup").style.display = "block";
+    }
+    function closePopup() { document.getElementById("popup").style.display = "none"; }
 
-function updateRegen(entity) {
-  if (entity.regenCooldown > 0) entity.regenCooldown--;
-  else if (entity.health < entity.maxHealth) entity.health = Math.min(entity.maxHealth, entity.health + 0.1);
-}
+    canvas.addEventListener("click", e => {
+      if (paused || gameOver) return;
+      const rect = canvas.getBoundingClientRect();
+      player.target.x = e.clientX - rect.left;
+      player.target.y = e.clientY - rect.top;
+    });
+    document.addEventListener("keydown", e => {
+      if (paused || gameOver) return;
+      if (e.ctrlKey && !player.weaponSwinging) {
+        ctrlPressed = true;
+        player.weaponSwinging = true;
+        player.weaponSwingTime = 0;
+        player.swingHitEnemy = enemies.map(()=>false);
+      }
+      if (e.key === "1") usePotion();
+    });
+    document.addEventListener("keyup", e => { if (!e.ctrlKey) ctrlPressed = false; });
+    document.getElementById("potionImg").onclick = function() { if (!paused && !gameOver) usePotion(); };
 
-function isColliding(x, y, radius) {
-  return colliders.some(c =>
-    x + radius > c.x &&
-    x - radius < c.x + c.width &&
-    y + radius > c.y &&
-    y - radius < c.y + c.height
-  );
-}
-
-function moveWithCollision(entity, dx, dy) {
-  const radius = entity.radius || 15;
-  const newX = entity.x + dx;
-  if (!isColliding(newX, entity.y, radius)) entity.x = newX;
-  const newY = entity.y + dy;
-  if (!isColliding(entity.x, newY, radius)) entity.y = newY;
-}
-
-function moveTowardWithCollision(entity, target, speed) {
-  const dx = target.x - entity.x;
-  const dy = target.y - entity.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist > 1) {
-    const stepX = (dx / dist) * speed;
-    const stepY = (dy / dist) * speed;
-    moveWithCollision(entity, stepX, stepY);
-  }
-}
-
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  camera.x = player.x - canvas.width / 2;
-  camera.y = player.y - canvas.height / 2;
-
-  moveTowardWithCollision(player, player.target, player.speed);
-
-  enemies.forEach(enemy => {
-    const distToPlayer = distance(player, enemy);
-    if (distToPlayer < 400 && !isInsideSafeZone(player.x, player.y)) enemy.active = true;
-
-    if (enemy.active) {
-      if (distToPlayer > 30 && !isInsideSafeZone(player.x, player.y)) {
-        moveTowardWithCollision(enemy, player, enemy.speed);
-      } else if (distToPlayer <= 30) {
-        player.health = Math.max(0, player.health - 0.5);
-        player.regenCooldown = 100;
+    function usePotion() {
+      if (potionCount > 0 && player.health < player.maxHealth) {
+        potionCount--;
+        player.health = Math.min(player.maxHealth, player.health + 50);
+        updatePotionUI(); updateUI();
+        showPopup("You drank a potion and regained 50 health!", potionImgSrc);
+        logEvent("Player used a potion and regained 50 health.", potionImgSrc, "event", "Potion Used", "Player drank a potion and regained 50 health.");
+      } else if (potionCount === 0) {
+        showPopup("No potions left!", potionImgSrc);
+      } else if (player.health === player.maxHealth) {
+        showPopup("You are already at full health.", potionImgSrc);
+      }
+    }
+    function updatePotionUI() { document.getElementById('potionCount').textContent = 'x' + potionCount; }
+    function updateUI() {
+      document.getElementById('playerBar').style.width = Math.max(0, (player.health/player.maxHealth)*100) + "%";
+      document.getElementById('playerBarLabel').textContent = `${Math.round(player.health)}/${player.maxHealth}`;
+      document.getElementById('playerShieldBar').style.width = Math.max(0, (player.shield/player.maxShield)*100) + "%";
+      document.getElementById('playerShieldLabel').textContent = `${Math.round(player.shield)}/${player.maxShield}`;
+      const alive = enemies.find(e=>!e.dead);
+      if (alive) {
+        document.getElementById('enemyBar').style.width = Math.max(0, (alive.health/alive.maxHealth)*100) + "%";
+        document.getElementById('enemyBarLabel').textContent = `${Math.round(alive.health)}/${alive.maxHealth}`;
       } else {
-        moveTowardWithCollision(enemy, enemy.patrol[0], enemy.speed);
+        document.getElementById('enemyBar').style.width = "0%";
+        document.getElementById('enemyBarLabel').textContent = `0/0`;
       }
-    } else {
-      const patrolTarget = enemy.patrol[enemy.patrolIndex];
-      if (distance(enemy, patrolTarget) < 10) {
-        enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.patrol.length;
+    }
+    function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+    function angleDiff(a, b) { let diff = a - b; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI; return diff; }
+    function circleRectCollide(cx, cy, cr, rx, ry, rw, rh) {
+      const closestX = Math.max(rx, Math.min(cx, rx + rw));
+      const closestY = Math.max(ry, Math.min(cy, ry + rh));
+      const dx = cx - closestX, dy = cy - closestY;
+      return (dx * dx + dy * dy) < (cr * cr);
+    }
+    function canMove(entity, nx, ny) {
+      for (const obs of obstacles) {
+        if (circleRectCollide(nx, ny, entity.radius, obs.x, obs.y, obs.w, obs.h)) return false;
       }
-      moveTowardWithCollision(enemy, patrolTarget, enemy.speed);
+      return true;
+    }
+    function checkGameOver() {
+      if (player.health <= 0) {
+        document.getElementById("gameOverOverlay").style.display = "flex";
+        paused = true; gameOver = true;
+      }
+    }
+    function restartGame() {
+      player.x = 200; player.y = 300; player.health = player.maxHealth; player.shield = player.maxShield;
+      enemies.forEach((e,i) => {
+        e.health = e.maxHealth; e.shield = e.maxShield; e.dead = false; e.delusionShown = false;
+        e.x = [700,500][i] || 700; e.y = [300,400][i] || 300; e.patrolIndex = 0;
+      });
+      collectibles.forEach(c=>c.collected=false);
+      potionCount = 3; paused = false; gameOver = false;
+      document.getElementById("gameOverOverlay").style.display = "none";
+      updatePotionUI(); updateUI(); gameLoop();
+    }
+    function randomAIEvent() {
+      const events = [
+        { msg: "AI robot discovered a new mineral deposit.", img: cellImgSrc },
+        { msg: "Enemy attempted a sneak attack!", img: enemyImgSrc },
+        { msg: "Player found a mysterious cell.", img: cellImgSrc },
+        { msg: "AI analyzed sky pattern: Quantum Lattice.", img: cellImgSrc },
+        { msg: "Enemy is patrolling the area.", img: enemyImgSrc },
+        { msg: "Player's sensors detected an anomaly.", img: playerImgSrc }
+      ];
+      const e = events[Math.floor(Math.random() * events.length)];
+      logEvent(e.msg, e.img, "event", "AI Event", e.msg);
+    }
+    setInterval(randomAIEvent, 9000);
+
+    function drawMiniMap() {
+      const mm = document.getElementById("miniMap");
+      const mmCtx = mm.getContext("2d");
+      mmCtx.clearRect(0, 0, mm.width, mm.height);
+      mmCtx.fillStyle = "lime";
+      mmCtx.beginPath();
+      mmCtx.arc(player.x/9, player.y/7.5, 4, 0, Math.PI*2);
+      mmCtx.fill();
+      enemies.forEach(e => {
+        if (!e.dead) {
+          mmCtx.fillStyle = "red";
+          mmCtx.beginPath();
+          mmCtx.arc(e.x/9, e.y/7.5, 4, 0, Math.PI*2);
+          mmCtx.fill();
+        }
+      });
+      mmCtx.fillStyle = "#888";
+      obstacles.forEach(obs => { mmCtx.fillRect(obs.x/9, obs.y/7.5, obs.w/9, obs.h/7.5); });
     }
 
-    if (distToPlayer < 40 && !isInsideSafeZone(player.x, player.y)) {
-      enemy.health = Math.max(0, enemy.health - 0.3);
-      enemy.regenCooldown = 100;
+    function drawPlayer(ctx, p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      if (playerImgLoaded) {
+        ctx.drawImage(playerImg, -p.radius, -p.radius, p.radius*2, p.radius*2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radius, 0, Math.PI*2);
+        ctx.fillStyle = "#00f";
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+      }
+      // Sword
+      ctx.save();
+      ctx.rotate(p.weaponAngle);
+      ctx.fillStyle = "#ccc";
+      ctx.fillRect(18, -4, 32, 8);
+      ctx.restore();
+      ctx.restore();
+    }
+    function drawEnemy(ctx, e) {
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      if (enemyImgLoaded) {
+        ctx.drawImage(enemyImg, -e.radius, -e.radius, e.radius*2, e.radius*2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, e.radius, 0, Math.PI*2);
+        ctx.fillStyle = "#f00";
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+      }
+      // Ostrich leg club (shiny grey, narrow)
+      ctx.save();
+      ctx.rotate(e.swinging ? Math.sin(e.swingPhase) * 0.7 : 0);
+      ctx.fillStyle = "#bbb";
+      ctx.fillRect(-3, 18, 6, 32);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 48, 7, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+    }
+    function drawCollectible(ctx, item) {
+      ctx.save();
+      ctx.translate(item.x, item.y);
+      if (item.type === "coin") {
+        if (coinImgLoaded) ctx.drawImage(coinImg, -12, -12, 24, 24);
+        else { ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fillStyle="gold"; ctx.fill(); ctx.strokeStyle="#fff"; ctx.stroke(); }
+      } else if (item.type === "health") {
+        ctx.fillStyle = "lime";
+        ctx.fillRect(-12, -12, 24, 24);
+        ctx.strokeStyle = "#fff";
+        ctx.strokeRect(-12, -12, 24, 24);
+      }
+      ctx.restore();
     }
 
-    updateRegen(enemy);
-    enemy.weaponSwing += 0.05 * enemy.swingDir;
-    if (enemy.weaponSwing > 0.5 || enemy.weaponSwing < -0.5) enemy.swingDir *= -1;
-  });
+    function gameLoop() {
+      if (paused || gameOver) { requestAnimationFrame(gameLoop); return; }
+      // Move player toward target (with obstacle collision)
+      const dx = player.target.x - player.x, dy = player.target.y - player.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 1) {
+        const nx = player.x + (dx / dist) * player.speed;
+        const ny = player.y + (dy / dist) * player.speed;
+        if (canMove(player, nx, ny)) { player.x = nx; player.y = ny; }
+      }
+      // Enemy patrols and AI
+      enemies.forEach((enemy, idx) => {
+        if (enemy.dead) return;
+        const patrolTarget = enemy.patrol[enemy.patrolIndex];
+        const edx = patrolTarget.x - enemy.x, edy = patrolTarget.y - enemy.y;
+        const edist = Math.hypot(edx, edy);
+        if (edist > 1) {
+          const nx = enemy.x + (edx / edist) * enemy.speed;
+          const ny = enemy.y + (edy / edist) * enemy.speed;
+          if (canMove(enemy, nx, ny)) { enemy.x = nx; enemy.y = ny; }
+        } else { enemy.patrolIndex = (enemy.patrolIndex + 1) % enemy.patrol.length; }
+        // Enemy AI: attack if close
+        if (distance(player, enemy) < 48) {
+          enemy.active = true; enemy.swinging = true; enemy.swingPhase += 0.2;
+          if (enemy.swingPhase > Math.PI) enemy.swingPhase = 0;
+          if (enemy.swingPhase > Math.PI/2 && distance(player, enemy) < 32) {
+            if (player.shield > 0) {
+              const shieldDamage = Math.min(player.shield, 0.5);
+              player.shield -= shieldDamage;
+              player.health = Math.max(0, player.health - (0.5 - shieldDamage));
+            } else { player.health = Math.max(0, player.health - 0.5); }
+          }
+        } else { enemy.active = false; enemy.swinging = false; enemy.swingPhase = 0; }
+      });
 
-  updateRegen(player);
-  if (ctrlPressed) {
-    swingTime += 0.1;
-    player.weaponAngle = Math.sin(swingTime) * 0.8;
-  } else {
-    player.weaponAngle = 0;
-  }
+      // Player weapon follows mouse
+      const mx = player.target.x, my = player.target.y;
+      let angleToMouse = Math.atan2(my - player.y, mx - player.x);
 
-  // Draw safe zone
-  ctx.fillStyle = "rgba(0,255,0,0.2)";
-  ctx.fillRect(safeZone.x - camera.x, safeZone.y - camera.y, safeZone.width, safeZone.height);
+      // Player swing animation (multi-enemy)
+      if (player.weaponSwinging) {
+        player.weaponSwingTime += 0.2;
+        player.weaponAngle = angleToMouse + Math.sin(player.weaponSwingTime) * 0.7;
+        enemies.forEach((enemy, i) => {
+          if (enemy.dead) return;
+          if (player.swingHitEnemy[i]) return;
+          if (distance(player, enemy) < 32) {
+            const angleToEnemy = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+            if (Math.abs(angleDiff(player.weaponAngle, angleToEnemy)) < 0.9) {
+              if (enemy.shield > 0) { enemy.shield = Math.max(0, enemy.shield - 10); }
+              else { enemy.health = Math.max(0, enemy.health - 30); }
+              player.swingHitEnemy[i] = true;
+              logEvent(`Player hit ${enemy.name} for 30 damage!`, playerImgSrc, "event", "Attack", `Player hit ${enemy.name} for 30 damage!`);
+              if (enemy.shield < 10 && !enemy.delusionShown) {
+                enemy.delusionShown = true;
+                logEvent(`${enemy.name}: Delusion triggered!`, enemyImgSrc, "event", "Delusion", `${enemy.name}'s shield is nearly gone. Delusion sets in!`);
+                showPopup(`${enemy.name}'s shield is nearly gone. Delusion sets in!`, enemyImgSrc);
+              }
+              if (enemy.type === 2 && player.shield > 0) player.shield = Math.max(0, player.shield - 10);
+            }
+          }
+        });
+        if (player.weaponSwingTime > Math.PI) {
+          player.weaponSwinging = false;
+          player.weaponSwingTime = 0;
+          player.swingHitEnemy = enemies.map(()=>false);
+        }
+      } else { player.weaponAngle = angleToMouse; }
 
-  // Draw colliders
-  ctx.fillStyle = "rgba(255,255,255,0.3)";
-  colliders.forEach(c => {
-    ctx.fillRect(c.x - camera.x, c.y - camera.y, c.width, c.height);
-  });
+      enemies.forEach(enemy => {
+        if (enemy.health <= 0 && !enemy.dead) {
+          enemy.dead = true;
+          logEvent(`${enemy.name} defeated!`, enemyImgSrc, "event", "Enemy Defeated", `${enemy.name} was defeated by the player.`);
+          showPopup(`${enemy.name} defeated!`, enemyImgSrc);
+        }
+      });
 
-  // Draw door gap
-  ctx.fillStyle = "rgba(0,255,255,0.3)";
-  ctx.fillRect(800 - camera.x, 0 - camera.y, 100, 40);
+      collectibles.forEach(item => {
+        if (!item.collected && distance(player, item) < 24) {
+          item.collected = true;
+          if (item.type === "coin") {
+            logEvent("Player collected a coin!", coinImgSrc, "event", "Coin", "Player collected a coin!");
+          } else if (item.type === "health") {
+            player.health = Math.min(player.maxHealth, player.health + 20);
+            logEvent("Player collected a health pack!", potionImgSrc, "event", "Health", "Player collected a health pack!");
+          }
+        }
+      });
 
-  // Draw player
-  ctx.drawImage(playerImg, player.x - 20 - camera.x, player.y - 20 - camera.y, 40, 40);
-  ctx.save();
-  ctx.translate(player.x - camera.x, player.y - camera.y);
-  ctx.rotate(player.weaponAngle);
-  ctx.fillStyle = "red";
-  ctx.fillRect(-3, -40, 6, 20);
-  ctx.restore();
-
-  // Draw enemies
-  enemies.forEach(enemy => {
-    ctx.drawImage(enemyImg, enemy.x - 15 - camera.x, enemy.y - 15 - camera.y, 30, 30);
-    ctx.save();
-    ctx.translate(enemy.x - camera.x, enemy.y - camera.y);
-    ctx.rotate(enemy.weaponSwing
-);
-    ctx.fillStyle = "blue";
-    ctx.fillRect(-2, 15, 4, 25); // swinging blade
-    ctx.restore();
-  });
-
-  // Draw health bars
-  drawHealthBar(20, 20, 200, 10, player.health, player.maxHealth, "lime");
-  enemies.forEach((enemy, i) => {
-    drawHealthBar(20, 40 + i * 20, 200, 10, enemy.health, enemy.maxHealth, "red");
-  });
-
-  requestAnimationFrame(gameLoop);
-}
-
-// Start game loop after images load
-playerImg.onload = () => {
-  enemyImg.onload = () => {
-    gameLoop();
-  };
-};
-</script>
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save(); ctx.fillStyle = "#888";
+      obstacles.forEach(obs => ctx.fillRect(obs.x, obs.y, obs.w, obs.h));
+      ctx.restore();
+      collectibles.forEach(item => { if (!item.collected) drawCollectible(ctx, item); });
+      drawPlayer(ctx, player);
+      enemies.forEach(enemy => { if (!enemy.dead) drawEnemy(ctx, enemy); });
+      updateUI();
+      drawMiniMap();
+      checkGameOver();
+      requestAnimationFrame(gameLoop);
+    }
+    updatePotionUI(); updateUI(); gameLoop();
+  </script>
 </body>
 </html>
